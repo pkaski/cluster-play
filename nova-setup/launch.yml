@@ -199,6 +199,7 @@
    - name: Install wget
      yum: name=wget state=present
    - name: Download Spark binaries
+     sudo: no
      shell: wget {{ spark_download }} -O {{ spark_archive }}
    - name: Extract Spark binaries
      sudo: no
