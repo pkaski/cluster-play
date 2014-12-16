@@ -18,9 +18,11 @@ cluster_key_path: "~/.ssh"
   # + path where to create cluster key
 
 
-spark_tar: "/root/spark-1.1.0-bin-hadoop1.tgz"
+spark_download: "http://d3kbcqa49mib13.cloudfront.net/spark-1.1.1-bin-hadoop1.tgz"
+  # download link for spark
+spark_archive: "~/spark-1.1.1-bin-hadoop1.tgz"
   # spark tar on localhost
-spark_path: "~/spark-1.1.0-bin-hadoop1"
+spark_path: "~/spark-1.1.1-bin-hadoop1"
   # spark root directory on cluster nodes
 
 master_group:  "default"  # security group for cluster master nodes, must exist
