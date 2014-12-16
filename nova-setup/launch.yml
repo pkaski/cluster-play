@@ -84,8 +84,9 @@
       cluster_login_group: "{{ cluster_login_group }}"
       cluster_key:         "{{ cluster_key }}"
       cluster_key_path:    "{{ cluster_key_path }}"
+      spark_download:      "{{ spark_download }}"
       spark_path:          "{{ spark_path }}"
-      spark_tar:           "{{ spark_tar }}"
+      spark_archive:       "{{ spark_archive }}"
 
 - name: Configure flavor and image [slaves]
   vars_files:
@@ -103,8 +104,9 @@
       cluster_login_group: "{{ cluster_login_group }}"
       cluster_key:         "{{ cluster_key }}"
       cluster_key_path:    "{{ cluster_key_path }}"
+      spark_download:      "{{ spark_download }}"
       spark_path:          "{{ spark_path }}"
-      spark_tar:           "{{ spark_tar }}"
+      spark_archive:       "{{ spark_archive }}"
 
 - name: Provision all cluster nodes
   vars:
@@ -194,16 +196,13 @@
   tasks:
    - name: Install Java
      yum: name=java state=present
-   - name: Copying Spark binaries
-     sudo: no
-     copy: "src={{ spark_tar }}
-             dest=~/spark.tgz
-      	     owner={{ cluster_login_user }} 
-             group={{ cluster_login_group }}
-             mode=0644"
+   - name: Install wget
+     yum: name=wget state=present
+   - name: Download Spark binaries
+     shell: wget {{ spark_download }} -O {{ spark_archive }}
    - name: Extract Spark binaries
      sudo: no
-     command: "tar -zxvf ~/spark.tgz"
+     command: "tar -zxvf {{ spark_archive }}"
 
 - name: Configure Spark on the cluster
   hosts: cluster_*
