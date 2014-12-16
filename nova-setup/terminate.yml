@@ -1,0 +1,135 @@
+---
+
+#
+# Run as [add -vvvv to get debug output]:
+#
+#    ansible-playbook terminate.yml -i local.inv
+#
+# Remarks:   
+# 1) Needs OpenStack credentials
+# 2) Must be able to ssh to itself
+#
+
+- name: Check credentials
+  vars_files:
+  - config.yml
+  vars:
+    os_auth_url: "{{ lookup('env','OS_AUTH_URL') }}"
+    os_tenant:   "{{ lookup('env','OS_TENANT_NAME') }}"
+    os_user:     "{{ lookup('env','OS_USERNAME') }}"
+    os_password: "{{ lookup('env','OS_PASSWORD') }}"
+    os_cred_str: "--os-auth-url {{ os_auth_url }} --os-tenant-name {{ os_tenant }} --os-username {{ os_user }} --os-password {{ os_password }}"
+  hosts: all
+  gather_facts: no
+  tasks:
+  - name: Run image-list to test our credentials (if any)
+    shell: "nova {{ os_cred_str }} image-list"
+
+- name: Set up variables and the host group for cluster master
+  vars_files:
+  - config.yml
+  hosts: all
+  gather_facts: no
+  tasks:
+  - name: Add hosts to group
+    add_host:
+      name: "{{ cluster_id }}_{{ item }}"
+      ansible_ssh_host: 127.0.0.1
+      groups: cluster_master
+      ansible_connection: local
+      oshost: "{{ cluster_id }}_{{ item }}"
+    with_items: master_node_list
+
+- name: Set up variables and the host group for cluster slaves
+  vars_files:
+  - config.yml
+  hosts: all
+  gather_facts: no
+  tasks:
+  - name: Add hosts to group
+    add_host:
+      name: "{{ cluster_id }}_{{ item }}"
+      ansible_ssh_host: 127.0.0.1
+      groups: cluster_slaves
+      ansible_connection: local
+      oshost: "{{ cluster_id }}_{{ item }}"
+    with_items: slave_node_list
+
+- name: Configure flavor and image [master]
+  vars_files:
+  - config.yml
+  hosts: cluster_master
+  gather_facts: no
+  tasks:
+  - name: Set facts for instance
+    set_fact:
+      in_flavor: "{{ master_flavor }}"
+      in_image:  "{{ master_image }}"
+      in_group:  "{{ master_group }}"
+      in_key:    "{{ cluster_key }}"
+      cluster_login_user:  "{{ cluster_login_user }}"
+      cluster_login_group: "{{ cluster_login_group }}"
+      cluster_key:         "{{ cluster_key }}"
+      cluster_key_path:    "{{ cluster_key_path }}"
+      spark_path:          "{{ spark_path }}"
+
+- name: Configure flavor and image [slaves]
+  vars_files:
+  - config.yml
+  hosts: cluster_slaves
+  gather_facts: no
+  tasks:
+  - name: Set facts for instance
+    set_fact:
+      in_flavor: "{{ slave_flavor }}"
+      in_image:  "{{ slave_image }}"
+      in_group:  "{{ slave_group }}"
+      in_key:    "{{ cluster_key }}"
+      cluster_login_user:  "{{ cluster_login_user }}"
+      cluster_login_group: "{{ cluster_login_group }}"
+      cluster_key:         "{{ cluster_key }}"
+      cluster_key_path:    "{{ cluster_key_path }}"
+      spark_path:          "{{ spark_path }}"
+
+- name: Bring down all cluster nodes
+  vars:
+    os_auth_url: "{{ lookup('env','OS_AUTH_URL') }}"
+    os_tenant:   "{{ lookup('env','OS_TENANT_NAME') }}"
+    os_user:     "{{ lookup('env','OS_USERNAME') }}"
+    os_password: "{{ lookup('env','OS_PASSWORD') }}"
+    os_key_id:   "{{ in_key }}"
+  hosts: cluster_*
+  gather_facts: no
+  tasks:
+  - name: Terminate cluster VMs on Openstack
+    nova_compute:
+      name: "{{ oshost }}"
+      state: absent             # present to launch, absent to terminate
+      auth_url: "{{ os_auth_url }}"
+      login_username: "{{ os_user }}"
+      login_tenant_name: "{{ os_tenant }}"
+      login_password: "{{ os_password }}"
+      image_id: "{{ in_image }}"
+      flavor_id: "{{ in_flavor }}" 
+      key_name: "{{ os_key_id }}"
+      security_groups: "{{ in_group }}"      
+      wait_for: 200
+    register: launch_data
+
+- name: Delete access structure to cluster
+  vars_files:
+  - config.yml
+  vars:
+    os_auth_url: "{{ lookup('env','OS_AUTH_URL') }}"
+    os_tenant:   "{{ lookup('env','OS_TENANT_NAME') }}"
+    os_user:     "{{ lookup('env','OS_USERNAME') }}"
+    os_password: "{{ lookup('env','OS_PASSWORD') }}"
+    os_cred_str: "--os-auth-url {{ os_auth_url }} --os-tenant-name {{ os_tenant }} --os-username {{ os_user }} --os-password {{ os_password }}"
+  hosts: localhost
+  gather_facts: no
+  tasks:
+  - name: Delete master key pair (if any)
+    shell: "rm -f {{ cluster_key_path }}/{{ cluster_key }} {{ cluster_key_path }}/{{ cluster_key }}.pub"
+  - name: Delete master key from OpenStack (if any)
+    shell: "nova {{ os_cred_str }} keypair-delete {{ cluster_key }}"
+    ignore_errors: yes

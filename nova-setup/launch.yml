@@ -1,0 +1,245 @@
+---
+
+#
+# Run as [add -vvvv to get debug output]:
+#
+#    ansible-playbook launch.yml -i local.inv
+#
+# Remarks:   
+# 1) Needs OpenStack credentials
+# 2) Must be able to ssh to itself
+#
+
+- name: Create and register access structure to cluster
+  vars_files:
+  - config.yml
+  vars:
+    os_auth_url: "{{ lookup('env','OS_AUTH_URL') }}"
+    os_tenant:   "{{ lookup('env','OS_TENANT_NAME') }}"
+    os_user:     "{{ lookup('env','OS_USERNAME') }}"
+    os_password: "{{ lookup('env','OS_PASSWORD') }}"
+    os_cred_str: "--os-auth-url {{ os_auth_url }} --os-tenant-name {{ os_tenant }} --os-username {{ os_user }} --os-password {{ os_password }}"
+  hosts: all
+  gather_facts: no
+  tasks:
+  - name: Run image-list to test our credentials (if any)
+    shell: "nova {{ os_cred_str }} image-list"
+  - name: Delete old master key pair (if any)
+    shell: "rm -f {{ cluster_key_path }}/{{ cluster_key }} {{ cluster_key_path }}/{{ cluster_key }}.pub"
+  - name: Delete old master key from OpenStack (if any)
+    shell: "nova {{ os_cred_str }} keypair-delete {{ cluster_key }}"
+    ignore_errors: yes
+  - name: Create master key pair for the cluster
+    shell: "ssh-keygen -P '' -f {{ cluster_key_path }}/{{ cluster_key }}"
+  - name: Register master key with OpenStack
+    shell: "nova {{ os_cred_str }} keypair-add  --pub-key {{ cluster_key_path }}/{{ cluster_key }}.pub {{ cluster_key }}"
+  - name: Create authorized list for master nodes
+    shell: "cat {{ root_authorized }} {{ cluster_key_path }}/{{ cluster_key }}.pub >{{ cluster_key_path }}/{{ cluster_key }}.master_authorized"
+  - name: Create authorized list for slave nodes
+    shell: "cat {{ root_authorized }} {{ cluster_key_path }}/{{ cluster_key }}.pub >{{ cluster_key_path }}/{{ cluster_key }}.slave_authorized"
+
+- name: Set up variables and the host group for cluster master
+  vars_files:
+  - config.yml
+  hosts: all
+  gather_facts: no
+  tasks:
+  - name: Add hosts to group
+    add_host:
+      name: "{{ cluster_id }}_{{ item }}"
+      ansible_ssh_host: 127.0.0.1
+      groups: cluster_master
+      ansible_connection: local
+      oshost: "{{ cluster_id }}_{{ item }}"
+    with_items: master_node_list
+
+- name: Set up variables and the host group for cluster slaves
+  vars_files:
+  - config.yml
+  hosts: all
+  gather_facts: no
+  tasks:
+  - name: Add hosts to group
+    add_host:
+      name: "{{ cluster_id }}_{{ item }}"
+      ansible_ssh_host: 127.0.0.1
+      groups: cluster_slaves
+      ansible_connection: local
+      oshost: "{{ cluster_id }}_{{ item }}"
+    with_items: slave_node_list
+
+- name: Configure flavor and image [master]
+  vars_files:
+  - config.yml
+  hosts: cluster_master
+  gather_facts: no
+  tasks:
+  - name: Set facts for instance
+    set_fact:
+      in_flavor: "{{ master_flavor }}"
+      in_image:  "{{ master_image }}"
+      in_group:  "{{ master_group }}"
+      in_key:    "{{ cluster_key }}"
+      cluster_login_user:  "{{ cluster_login_user }}"
+      cluster_login_group: "{{ cluster_login_group }}"
+      cluster_key:         "{{ cluster_key }}"
+      cluster_key_path:    "{{ cluster_key_path }}"
+      spark_path:          "{{ spark_path }}"
+      spark_tar:           "{{ spark_tar }}"
+
+- name: Configure flavor and image [slaves]
+  vars_files:
+  - config.yml
+  hosts: cluster_slaves
+  gather_facts: no
+  tasks:
+  - name: Set facts for instance
+    set_fact:
+      in_flavor: "{{ slave_flavor }}"
+      in_image:  "{{ slave_image }}"
+      in_group:  "{{ slave_group }}"
+      in_key:    "{{ cluster_key }}"
+      cluster_login_user:  "{{ cluster_login_user }}"
+      cluster_login_group: "{{ cluster_login_group }}"
+      cluster_key:         "{{ cluster_key }}"
+      cluster_key_path:    "{{ cluster_key_path }}"
+      spark_path:          "{{ spark_path }}"
+      spark_tar:           "{{ spark_tar }}"
+
+- name: Provision all cluster nodes
+  vars:
+    os_auth_url: "{{ lookup('env','OS_AUTH_URL') }}"
+    os_tenant:   "{{ lookup('env','OS_TENANT_NAME') }}"
+    os_user:     "{{ lookup('env','OS_USERNAME') }}"
+    os_password: "{{ lookup('env','OS_PASSWORD') }}"
+    os_key_id:   "{{ in_key }}"
+  hosts: cluster_*
+  gather_facts: no
+  tasks:
+  - name: Launch cluster VMs on Openstack
+    nova_compute:
+      name: "{{ oshost }}"
+      state: present             # present to launch, absent to terminate
+      auth_url: "{{ os_auth_url }}"
+      login_username: "{{ os_user }}"
+      login_tenant_name: "{{ os_tenant }}"
+      login_password: "{{ os_password }}"
+      image_id: "{{ in_image }}"
+      flavor_id: "{{ in_flavor }}" 
+      key_name: "{{ os_key_id }}"
+      security_groups: "{{ in_group }}"      
+      wait_for: 200
+    register: launch_data
+  - name: Show host names and IPs [information only]
+    debug:
+      msg: "{{ oshost }} {{ launch_data['private_ip'] }}"
+  - name: Set connections via access structure
+    set_fact:
+      ansible_connection: ssh
+      ansible_ssh_user: "{{ cluster_login_user }}"
+      ansible_ssh_private_key_file: "{{ cluster_key_path }}/{{ cluster_key }}"
+      ansible_ssh_host: "{{ launch_data['private_ip'] }}"
+
+- name: Wait for nodes
+  hosts: cluster_*
+  sudo: no
+  gather_facts: no
+  tasks:
+  - name: Port 22 started on all nodes
+    local_action: wait_for host={{ ansible_ssh_host }} port=22 state=started
+  - name: Wait 60 seconds [for access keys to get configured]
+    pause: seconds=60
+
+- name: Set up access structure on slave nodes
+  vars_files:
+  - config.yml
+  hosts: cluster_slaves
+  sudo: yes
+  tasks:
+   - name: Copying authorized list to slaves
+     copy: "src={{ cluster_key_path }}/{{ cluster_key }}.slave_authorized
+             dest=~/.ssh/authorized_keys
+      	     owner={{ cluster_login_user }} 
+             group={{ cluster_login_group }}
+             mode=0644"
+
+- name: Set up access structure on master nodes
+  vars_files:
+  - config.yml
+  hosts: cluster_master
+  sudo: no
+  tasks:
+   - name: Copying authorized list to master
+     copy: "src={{ cluster_key_path }}/{{ cluster_key }}.master_authorized
+             dest=~/.ssh/authorized_keys
+      	     owner={{ cluster_login_user }} 
+             group={{ cluster_login_group }}
+             mode=0644"
+   - name: Copying master public key to master
+     copy: "src={{ cluster_key_path }}/{{ cluster_key }}.pub
+  	     dest=~/.ssh/id_rsa.pub
+      	     owner={{ cluster_login_user }} 
+             group={{ cluster_login_group }}
+             mode=0644"
+   - name: Copying master private key to master
+     copy: "src={{ cluster_key_path }}/{{ cluster_key }}
+             dest=~/.ssh/id_rsa
+      	     owner={{ cluster_login_user }} 
+             group={{ cluster_login_group }}
+             mode=0600"            # NOTE MODE 0600 FOR PRIVATE KEY!
+
+- name: Install Spark on the cluster
+  hosts: cluster_*
+  sudo: yes
+  tasks:
+   - name: Install Java
+     yum: name=java state=present
+   - name: Copying Spark binaries
+     sudo: no
+     copy: "src={{ spark_tar }}
+             dest=~/spark.tgz
+      	     owner={{ cluster_login_user }} 
+             group={{ cluster_login_group }}
+             mode=0644"
+   - name: Extract Spark binaries
+     sudo: no
+     command: "tar -zxvf ~/spark.tgz"
+
+- name: Configure Spark on the cluster
+  hosts: cluster_*
+  sudo: no
+  tasks:
+   - name: Set up Spark env config
+     action: lineinfile
+             create=yes
+             state=present
+             dest="{{ spark_path }}/conf/spark-env.sh"
+             line="#!/usr/bin/env bash"
+   - name: Add bind local IP to Spark config
+     action: lineinfile
+             state=present
+             dest="{{ spark_path }}/conf/spark-env.sh"
+             line="export SPARK_LOCAL_IP={{ ansible_ssh_host }}"
+   - name: Add bind master IP to Spark config
+     action: lineinfile
+             state=present
+             dest="{{ spark_path }}/conf/spark-env.sh"
+             line="export SPARK_MASTER_IP={{ hostvars[item]['ansible_ssh_host'] }}"
+     when: hostvars[item]['ansible_ssh_host'] is defined
+     with_items: groups.cluster_master
+
+- name: Configure Spark on master node, start Spark
+  vars_files:
+  - config.yml
+  hosts: cluster_master
+  sudo: no
+  tasks:
+   - name: Set up slave file
+     template: src=templates/slaves.j2 dest="{{ spark_path }}/conf/slaves"
+   - name: Start spark
+     command: "{{ spark_path }}/sbin/start-all.sh"
+   - name: Ping
+     local_action: wait_for host={{ ansible_ssh_host }} port=7077 state=started
+   - debug: msg="Spark master running at spark://{{ ansible_ssh_host }}:7077"
+
+

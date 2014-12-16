@@ -1,0 +1,47 @@
+---
+
+# Cluster configuration file for launch.yml & terminate.yml
+
+root_authorized: "~/.ssh/id_rsa.pub"
+  # path to (list of) public key(s) authorized to access cluster
+
+cluster_id:  "my_cluster"  
+  # name (prefix) for cluster nodes
+
+cluster_login_user:  "cloud-user"
+cluster_login_group: "cloud-user"
+  # login user and group to use for the cluster nodes 
+
+cluster_key: "cluster-key"
+cluster_key_path: "~/.ssh"
+  # ssh key ID for cluster, gets created & registered in OpenStack
+  # + path where to create cluster key
+
+
+spark_tar: "/root/spark-1.1.0-bin-hadoop1.tgz"
+  # spark tar on localhost
+spark_path: "~/spark-1.1.0-bin-hadoop1"
+  # spark root directory on cluster nodes
+
+master_group:  "default"  # security group for cluster master nodes, must exist
+slave_group:   "default"  # security group for cluster slave nodes, must exist
+
+# run "nova image-list" to get list of available images
+
+master_image:  "35e23981-dcd8-4f67-98de-4fac4a858451" # CentOS-7.0
+slave_image:   "35e23981-dcd8-4f67-98de-4fac4a858451"
+
+# run "nova flavor-list" to get list of available instance flavors
+
+master_flavor: "417fcb76-884b-405f-a4f4-8bce27058e4a" # mini
+slave_flavor:  "417fcb76-884b-405f-a4f4-8bce27058e4a"
+
+master_node_list: 
+- fe
+
+slave_node_list: # []
+- node01
+- node02
+- node03
+- node04
+
