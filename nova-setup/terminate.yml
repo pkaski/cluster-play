@@ -6,8 +6,9 @@
 #    ansible-playbook terminate.yml -i local.inv
 #
 # Remarks:   
-# 1) Needs OpenStack credentials
-# 2) Must be able to ssh to itself
+# 1) Needs OpenStack credentials in shell environment
+# 2) Must be able to ssh to localhost
+#    [passwordless ~/.ssh/id_rsa and ~/.ssh/id_rsa.pub available & authorized]
 #
 
 - name: Check credentials
