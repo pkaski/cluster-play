@@ -14,7 +14,11 @@ tar -zxvf scala-2.11.2.tgz
 
 wget ftp://mirror.reverse.net/pub/apache/maven/maven-3/3.2.5/binaries/apache-maven-3.2.5-bin.zip
 unzip apache-maven-3.2.5-bin.zip
+
+# configure maven
+
 export PATH=$PATH:`pwd`/apache-maven-3.2.5/bin
+export MAVEN_OPTS="-Xmx2g -XX:MaxPermSize=512M -XX:ReservedCodeCacheSize=512m"
 
 # get spark source
 
