@@ -1,0 +1,44 @@
+
+# source in a directory where you want to set up & compile Spark 
+
+# to java (say 'which java' in case of doubt & trim '/bin/java' out)
+
+export JAVA_HOME=/usr
+
+# get scala
+
+wget http://downloads.typesafe.com/scala/2.11.2/scala-2.11.2.tgz
+tar -xvf scala-2.11.2.tgz
+
+# get maven
+
+wget ftp://mirror.reverse.net/pub/apache/maven/maven-3/3.2.5/binaries/apache-maven-3.2.5-bin.zip
+unzip apache-maven-3.2.5-bin.zip
+export PATH=$PATH:`pwd`/apache-maven-3.2.5/bin
+
+# get spark source
+
+wget http://d3kbcqa49mib13.cloudfront.net/spark-1.2.0.tgz
+tar -xvf spark-1.2.0.tgz
+
+# build spark for scala 2.11
+#
+# see:
+# http://spark.apache.org/docs/latest/building-spark.html#building-for-scala-211
+
+cd spark-1.2.0
+dev/change-version-to-2.11.sh
+mvn -Dscala-2.11 -DskipTests clean package
+cd ..
+cp spark-1.2.0/assembly/target/scala-2.11/spark-assembly-1.2.0-hadoop1.0.4.jar .
+
+# set up JCuda for CUDA 6.0
+# (libs compiled for CUDA 6.0.37, 
+#  see http://www.jcuda.org/downloads/downloads.html)
+
+wget http://www.jcuda.org/downloads/JCuda-All-0.6.0-bin-linux-x86_64.zip
+unzip JCuda-All-0.6.0-bin-linux-x86_64.zip
+
+# complete
+
+echo 'setup complete'
