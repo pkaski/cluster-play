@@ -1,14 +1,18 @@
 
 # source in a directory where you want to set up & compile Spark 
 
+# --> reverted back to older version of Scala & Spark
+
 # to java (say 'which java' in case of doubt & trim '/bin/java' out)
 
 export JAVA_HOME=/usr
 
 # get scala
 
-wget http://downloads.typesafe.com/scala/2.11.2/scala-2.11.2.tgz
-tar -zxvf scala-2.11.2.tgz
+#wget http://downloads.typesafe.com/scala/2.11.2/scala-2.11.2.tgz
+#tar -zxvf scala-2.11.2.tgz
+wget http://www.scala-lang.org/files/archive/scala-2.10.3.tgz
+tar -zxvf scala-2.10.3.tgz
 
 # get maven
 
@@ -22,19 +26,29 @@ export MAVEN_OPTS="-Xmx2g -XX:MaxPermSize=512M -XX:ReservedCodeCacheSize=512m"
 
 # get spark source
 
-wget http://d3kbcqa49mib13.cloudfront.net/spark-1.2.0.tgz
-tar -zxvf spark-1.2.0.tgz
+#wget http://d3kbcqa49mib13.cloudfront.net/spark-1.2.0.tgz
+#tar -zxvf spark-1.2.0.tgz
+
+wget http://d3kbcqa49mib13.cloudfront.net/spark-1.1.1.tgz
+tar -zxvf spark-1.1.1.tgz
 
 # build spark for scala 2.11
 #
 # see:
 # http://spark.apache.org/docs/latest/building-spark.html#building-for-scala-211
+#
+#cd spark-1.2.0
+#dev/change-version-to-2.11.sh
+#mvn -Dscala-2.11 -DskipTests clean package
+#cd ..
+#cp spark-1.2.0/assembly/target/scala-2.11/spark-assembly-1.2.0-hadoop1.0.4.jar .
 
-cd spark-1.2.0
-dev/change-version-to-2.11.sh
-mvn -Dscala-2.11 -DskipTests clean package
+# build spark for scala 2.10
+
+cd spark-1.1.1
+mvn -DskipTests clean package
 cd ..
-cp spark-1.2.0/assembly/target/scala-2.11/spark-assembly-1.2.0-hadoop1.0.4.jar .
+cp spark-1.1.1/assembly/target/scala-2.10/spark-assembly-1.1.1-hadoop1.0.4.jar .
 
 # set up JCuda for CUDA 6.0
 # (libs compiled for CUDA 6.0.37, 
