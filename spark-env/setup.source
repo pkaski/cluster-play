@@ -11,8 +11,8 @@ export JAVA_HOME=/usr
 
 #wget http://downloads.typesafe.com/scala/2.11.2/scala-2.11.2.tgz
 #tar -zxvf scala-2.11.2.tgz
-wget http://www.scala-lang.org/files/archive/scala-2.10.3.tgz
-tar -zxvf scala-2.10.3.tgz
+wget http://www.scala-lang.org/files/archive/scala-2.10.4.tgz
+tar -zxvf scala-2.10.4.tgz
 
 # get maven
 
