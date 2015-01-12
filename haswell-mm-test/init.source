@@ -1,0 +1,3 @@
+module load binutils
+module swap intel gcc/4.9.1
+export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:.
